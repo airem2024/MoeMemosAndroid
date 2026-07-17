@@ -43,6 +43,14 @@ private val DarkColorScheme = darkColorScheme(
     inverseSurface = md_theme_dark_inverseSurface,
     inversePrimary = md_theme_dark_inversePrimary,
     surfaceTint = md_theme_dark_surfaceTint,
+    outlineVariant = md_theme_dark_outlineVariant,
+    surfaceDim = md_theme_dark_surfaceDim,
+    surfaceBright = md_theme_dark_surfaceBright,
+    surfaceContainerLowest = md_theme_dark_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_dark_surfaceContainerLow,
+    surfaceContainer = md_theme_dark_surfaceContainer,
+    surfaceContainerHigh = md_theme_dark_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_dark_surfaceContainerHighest,
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -73,13 +81,21 @@ private val LightColorScheme = lightColorScheme(
     inverseSurface = md_theme_light_inverseSurface,
     inversePrimary = md_theme_light_inversePrimary,
     surfaceTint = md_theme_light_surfaceTint,
+    outlineVariant = md_theme_light_outlineVariant,
+    surfaceDim = md_theme_light_surfaceDim,
+    surfaceBright = md_theme_light_surfaceBright,
+    surfaceContainerLowest = md_theme_light_surfaceContainerLowest,
+    surfaceContainerLow = md_theme_light_surfaceContainerLow,
+    surfaceContainer = md_theme_light_surfaceContainer,
+    surfaceContainerHigh = md_theme_light_surfaceContainerHigh,
+    surfaceContainerHighest = md_theme_light_surfaceContainerHighest,
 )
 
 @Composable
 fun MoeMemosTheme(
         darkTheme: Boolean = isSystemInDarkTheme(),
-        // Dynamic color is available on Android 12+
-        dynamicColor: Boolean = true,
+        // Telos 配色是固定的，不跟系统壁纸动态取色
+        dynamicColor: Boolean = false,
         content: @Composable () -> Unit
 ) {
     val colorScheme = when {

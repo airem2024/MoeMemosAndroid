@@ -28,11 +28,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "me.mudkip.moememos"
+        applicationId = "app.telos.memos"
         minSdk = 26
         targetSdk = 36
         versionCode = 49
-        versionName = "2.0.4"
+        versionName = "2.0.4-t1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

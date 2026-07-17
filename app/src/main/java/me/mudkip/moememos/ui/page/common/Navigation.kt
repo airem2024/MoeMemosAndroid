@@ -4,9 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -18,8 +22,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
 import androidx.core.util.Consumer
+import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlin.math.abs
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -47,19 +59,58 @@ fun Navigation() {
     val context = LocalContext.current
     var shareContent by remember { mutableStateOf<ShareContent?>(null) }
 
+    // 右滑返回（Telos 手感）：编辑器等模态页除外，阈值触发 + 震动
+    val haptic = LocalHapticFeedback.current
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val modalRoutes = setOf(RouteName.INPUT, RouteName.SHARE)
+    val swipeBackEnabled = navController.previousBackStackEntry != null &&
+            modalRoutes.none { currentRoute == it } &&
+            currentRoute?.startsWith(RouteName.EDIT) != true
+    val swipeThresholdPx = with(LocalDensity.current) { 90.dp.toPx() }
+
     CompositionLocalProvider(LocalRootNavController provides navController) {
         MoeMemosTheme {
+            Box(
+                Modifier.pointerInput(swipeBackEnabled) {
+                    if (!swipeBackEnabled) return@pointerInput
+                    var totalDx = 0f
+                    var totalDy = 0f
+                    var fired = false
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDx = 0f; totalDy = 0f; fired = false },
+                        onHorizontalDrag = { change, dragAmount ->
+                            totalDx += dragAmount
+                            totalDy += change.positionChange().y
+                            if (!fired && totalDx > swipeThresholdPx && totalDx > abs(totalDy) * 2) {
+                                fired = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                navController.popBackStack()
+                            }
+                        }
+                    )
+                }
+            ) {
             NavHost(
                 modifier = Modifier.background(MaterialTheme.colorScheme.surface),
                 navController = navController,
                 startDestination = RouteName.MEMOS,
+                // 横向过场：进入从右滑入，返回向右滑出（配合右滑返回手势）
                 enterTransition = {
-                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up,
-                        initialOffset = { it / 4 }) + fadeIn()
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start,
+                        initialOffset = { it }) + fadeIn()
                 },
                 exitTransition = {
-                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down,
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start,
                         targetOffset = { it / 4 }) + fadeOut()
+                },
+                popEnterTransition = {
+                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End,
+                        initialOffset = { it / 4 }) + fadeIn()
+                },
+                popExitTransition = {
+                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End,
+                        targetOffset = { it }) + fadeOut()
                 },
             ) {
                 composable(RouteName.MEMOS) {
@@ -78,15 +129,18 @@ fun Navigation() {
                     LoginPage(navController = navController)
                 }
 
-                composable(RouteName.INPUT) {
+                composable(RouteName.INPUT,
+                    enterTransition = modalEnter, popExitTransition = modalExit) {
                     MemoInputPage()
                 }
 
-                composable(RouteName.SHARE) {
+                composable(RouteName.SHARE,
+                    enterTransition = modalEnter, popExitTransition = modalExit) {
                     MemoInputPage(shareContent = shareContent)
                 }
 
-                composable("${RouteName.EDIT}?memoId={id}"
+                composable("${RouteName.EDIT}?memoId={id}",
+                    enterTransition = modalEnter, popExitTransition = modalExit
                 ) { entry ->
                     MemoInputPage(memoIdentifier = entry.arguments?.getString("id"))
                 }
@@ -117,6 +171,7 @@ fun Navigation() {
                         MemoDetailPage(navController = navController, memoIdentifier = Uri.decode(memoId))
                     }
                 }
+            }
             }
         }
     }
@@ -190,3 +245,13 @@ fun Navigation() {
 
 val LocalRootNavController =
     compositionLocalOf<NavHostController> { error(me.mudkip.moememos.R.string.nav_host_controller_not_found.string) }
+
+// 编辑器一类的模态页：保留上滑弹出 / 下滑收起的过场
+private val modalEnter: (AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.() -> EnterTransition?) = {
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Up,
+        initialOffset = { it / 4 }) + fadeIn()
+}
+private val modalExit: (AnimatedContentTransitionScope<androidx.navigation.NavBackStackEntry>.() -> ExitTransition?) = {
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Down,
+        targetOffset = { it / 4 }) + fadeOut()
+}

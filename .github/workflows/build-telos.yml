@@ -1,0 +1,56 @@
+name: Build Telos APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
+            echo "Missing secret: ANDROID_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/release.keystore"
+
+      - name: Stamp versionCode
+        run: |
+          # 100 偏移避开上游 versionCode，run_number 自增保证可覆盖升级
+          CODE=$((100 + ${{ github.run_number }}))
+          sed -i "s/versionCode = [0-9]*/versionCode = ${CODE}/" app/build.gradle
+          sed -i "s/versionName = \"\([^\"]*\)\"/versionName = \"\1.${{ github.run_number }}\"/" app/build.gradle
+          grep -E "versionCode|versionName" app/build.gradle | head -2
+
+      - name: Build signed release APK
+        env:
+          ANDROID_SIGNING_STORE_FILE: ${{ runner.temp }}/release.keystore
+          ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: telos-memos-apk
+          path: app/build/outputs/apk/release/app-release.apk
